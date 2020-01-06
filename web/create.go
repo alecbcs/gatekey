@@ -11,7 +11,8 @@ import (
 	"github.com/alecbcs/gatekey/token"
 )
 
-//Create generates a new one time token for use in the database.
+// Create generates a new one time token for use in the database.
+// Create Syntax: http://server/create/ with authentication header credentials.
 func Create(w http.ResponseWriter, r *http.Request) {
 	err := authenticate(w, r)
 	if err != nil {

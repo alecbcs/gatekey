@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/alecbcs/gatekey/config"
 	"github.com/alecbcs/gatekey/database"
@@ -15,6 +16,7 @@ import (
 
 // Report authenticates POST requests from foriegn agents with temp tokens
 // against the internal database, then copies the POST data to temp storage.
+// Report Syntax: http://server/report/TOKEN
 func Report(w http.ResponseWriter, r *http.Request) {
 	token, err := checkAuth(w, r)
 	if err != nil || token.Value == "" {
@@ -37,38 +39,42 @@ func Report(w http.ResponseWriter, r *http.Request) {
 	}
 	tempFile, err := ioutil.TempFile(config.Global.Relay.TempFileLocation, "upload")
 	if err != nil {
-		fmt.Println(err)
+		reportError(w, r, "web.Report", err)
 	}
 	defer tempFile.Close()
 
 	fileBytes, err := ioutil.ReadAll(file)
 	if err != nil {
-		fmt.Println(err)
+		reportError(w, r, "web.Report", err)
 	}
-	tempFile.Write(fileBytes)
+	_, err = tempFile.Write(fileBytes)
+	if err != nil {
+		reportError(w, r, "web.Report", err)
+	}
 
 	fmt.Fprintf(w, "Successfully Uploaded File\n")
+
+	// Need to make HTTP Request to passthrough here.
+	// Then delete temp file.
 }
 
 func checkAuth(w http.ResponseWriter, r *http.Request) (token.Token, error) {
-	w.Header().Set("WWW-Authenticate", `Basic realm="Restricted"`)
-	username, password, authOK := r.BasicAuth()
-	if authOK == false {
-		return token.Token{}, errors.New("authOk Failed")
-	}
+	args := strings.Split(r.RequestURI, "/")
+	passcode := args[2]
 
 	db := database.Open(config.Global.Database.Location)
 	defer db.Close()
 
-	authKey, err := database.Get(db, password)
+	authKey, err := database.Get(db, passcode)
 	if err != nil {
 		return token.Token{}, err
 	}
-	if authKey.Value == "" {
-		return token.Token{}, errors.New("Key Not Found in Database")
-	}
-	if password == authKey.Value && username == authKey.MachineID {
+	if passcode == authKey.Value && authKey.Value != "" {
+		err = database.Remove(db, authKey)
+		if err != nil {
+			return token.Token{}, err
+		}
 		return authKey, nil
 	}
-	return token.Token{}, errors.New("MachineID doesn't match")
+	return token.Token{}, errors.New("Key Not Found in Database")
 }
