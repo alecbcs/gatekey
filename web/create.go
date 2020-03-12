@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
+	"net/url"
 
 	"github.com/alecbcs/gatekey/config"
 	"github.com/alecbcs/gatekey/database"
@@ -12,7 +12,8 @@ import (
 )
 
 // Create generates a new one time token for use in the database.
-// Create Syntax: http://server/create/ with authentication header credentials.
+// Create Syntax: http://server/create/?jid=SOMETHING&mid=SOMETHINGELSE with authentication header credentials.
+// Curl example: curl -u "USERNAME":"PASSWORD" 'http://SERVER:PORT/create/?jid=20&mid=10'
 func Create(w http.ResponseWriter, r *http.Request) {
 	err := authenticate(w, r)
 	if err != nil {
@@ -20,14 +21,21 @@ func Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	db := database.Open(config.Global.Database.Location)
-	args := strings.Split(r.RequestURI, "/")
-	if len(args) != 4 {
+
+	urldata, err := url.Parse(r.RequestURI)
+	if err != nil {
 		reportError(w, r, "web.Create", errors.New("Invalid Command Arguments"))
 	}
+
+	args, _ := url.ParseQuery(urldata.RawQuery)
+	if args["mid"] == nil || args["jid"] == nil {
+		reportError(w, r, "web.Create", errors.New("Invalid Command Arguments"))
+	}
+
 	result := token.Token{
 		Value:     token.GenValue(config.Global.Tokens.Length),
-		MachineID: args[3],
-		JobID:     args[2],
+		MachineID: args["mid"][0],
+		JobID:     args["jid"][0],
 	}
 	sucess, err := database.Add(db, result)
 	for !sucess {
