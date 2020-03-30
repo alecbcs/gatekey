@@ -1,6 +1,7 @@
 package config
 
 import (
+	"flag"
 	"log"
 	"os"
 	"os/user"
@@ -56,7 +57,10 @@ func init() {
 		log.Fatal(err)
 	}
 	// Create expected config path.
-	path = filepath.Join(user.HomeDir, ".config", "gatekey", "gatekey.config")
+	flagStr := flag.String("config", filepath.Join(user.HomeDir, ".config", "gatekey", "gatekey.config"), "string")
+	flag.Parse()
+	path = *(flagStr)
+
 	Global = defaultConf()
 	readConf(&Global)
 	// If the configuration version has changed update the config to the new
